@@ -1,0 +1,230 @@
+from fasthtml.common import *
+
+db = database('data/utodos.db')
+class Todo: id:int; title:str; done:bool; details:str; priority:int
+todos = db.create(Todo, transform=True)
+
+# Hyperview components
+def Doc(*c, **kwargs): return FT('doc', c, kwargs)
+def Screen(*c, **kwargs): return FT('screen', c, kwargs)
+def Body(*c, **kwargs): return FT('body', c, kwargs)
+def View(*c, **kwargs): return FT('view', c, kwargs)
+def Text(*c, **kwargs): return FT('text', c, kwargs)
+def TextField(*c, **kwargs): return FT('text-field', c, kwargs)
+def Behavior(*c, **kwargs): return FT('behavior', c, kwargs)
+def Styles(*c, **kwargs): return FT('styles', c, kwargs)
+def Style(id, **kwargs): return FT('style', (), {'id': id, **kwargs})
+def Switch(*c, **kwargs): return FT('switch', c, kwargs)
+
+def render_to_response(component):
+    """Render component to Hyperview XML response"""
+    content = to_xml(component)
+    response = Response(content)
+    response.headers['Content-Type'] = 'application/vnd.hyperview+xml'
+    return response
+
+def Header(*c, **kwargs): return FT('header', c, kwargs)
+
+def Layout(header_content=None, main_content=None):
+    """Base layout for all Hyperview screens"""
+    return Doc(
+        Screen(
+            Styles(
+                Style(id="body", flex="1", backgroundColor="#f9fafb"),
+                Style(id="header", backgroundColor="#3b82f6", padding="16", paddingTop="48"),
+                Style(id="header-title", fontSize="24", fontWeight="bold", color="#ffffff"),
+                Style(id="main", flex="1", padding="16"),
+                Style(id="button", backgroundColor="#3b82f6", color="#ffffff", 
+                      paddingHorizontal="20", paddingVertical="10", 
+                      borderRadius="6", fontWeight="600", textAlign="center",
+                      alignSelf="flex-start"),
+                Style(id="todo-item", flexDirection="row", justifyContent="space-between", 
+                      alignItems="center", paddingVertical="8"),
+                Style(id="todo-text", flex="1"),
+                Style(id="todo-actions", flexDirection="row", gap="8"),
+                Style(id="edit-button", backgroundColor="#10b981", color="#ffffff", 
+                      paddingHorizontal="12", paddingVertical="6", 
+                      borderRadius="4", fontSize="14"),
+                Style(id="delete-button", backgroundColor="#ef4444", color="#ffffff", 
+                      paddingHorizontal="12", paddingVertical="6", 
+                      borderRadius="4", fontSize="14"),
+                Style(id="text-field", borderWidth="1", borderColor="#d1d5db", 
+                      borderRadius="4", padding="8", backgroundColor="#ffffff",
+                      fontSize="16"),
+                Style(id="form-row", flexDirection="row", alignItems="center", 
+                      justifyContent="space-between", marginBottom="12"),
+                Style(id="label", fontSize="16", color="#374151")
+            ),
+            Body(
+                Header(
+                    header_content or Text("Contact.app", style="header-title"),
+                    style="header"
+                ),
+                View(main_content, style="main"),
+                style="body", safe_area="true"
+            )
+        ),
+        xmlns="https://hyperview.org/hyperview"
+    )
+
+app,rt = fast_app()
+
+def TodoItem(todo):
+    """Render a single todo item with edit and delete buttons"""
+    return View(
+        Text(f"{'✅ ' if todo.done else ''}{todo.title}", style="todo-text"),
+        View(
+            Text(
+                Behavior(trigger="press", verb="get", href=f"/todo/{todo.id}/edit", 
+                        action="replace", target=f"todo-{todo.id}"),
+                "Edit",
+                style="edit-button"
+            ),
+            Text(
+                Behavior(trigger="press", verb="post", href=f"/delete/{todo.id}", 
+                        action="replace", target=f"todo-{todo.id}"),
+                "Delete",
+                style="delete-button"
+            ),
+            style="todo-actions"
+        ),
+        id=f"todo-{todo.id}",
+        style="todo-item",
+        xmlns="https://hyperview.org/hyperview"
+    )
+
+def TodoEditItem(todo):
+    """Render todo item in edit mode"""
+    return Form(
+        View(
+            TextField(name="title", value=todo.title, style="text-field"),
+            View(
+                Text("Done", style="label"),
+                Switch(name="done", value="on", selected="true" if todo.done else "false"),
+                style="form-row"
+            ),
+            View(
+                Text(
+                    Behavior(trigger="press", verb="post", href=f"/todo/{todo.id}/edit", 
+                            action="replace", target=f"todo-{todo.id}"),
+                    "Save",
+                    style="edit-button"
+                ),
+                Text(
+                    Behavior(trigger="press", verb="get", href=f"/todo/{todo.id}", 
+                            action="replace", target=f"todo-{todo.id}"),
+                    "Cancel",
+                    style="delete-button"
+                ),
+                style="todo-actions"
+            ),
+            style="todo-item"
+        ),
+        id=f"todo-{todo.id}",
+        xmlns="https://hyperview.org/hyperview"
+    )
+
+
+def clr_details(): return Div(hx_swap_oob='innerHTML', id='current-todo')
+
+@rt
+def update(todo: Todo): return todos.update(todo), clr_details()
+
+@rt
+def edit(id:int):
+    res = Form(hx_post=update, target_id=f'todo-{id}', id="edit")(
+        Group(Input(id="title"), Button("Save")),
+        Hidden(id="id"), CheckboxX(id="done", label='Done'),
+        Textarea(id="details", name="details", rows=10))
+    return fill_form(res, todos[id])
+
+@rt
+def rm(id:int):
+    todos.delete(id)
+    return clr_details()
+
+@rt
+def show(id:int):
+    todo = todos[id]
+    btn = Button('delete', hx_post=rm.to(id=todo.id),
+                 hx_target=f'#todo-{todo.id}', hx_swap="outerHTML")
+    return Div(H2(todo.title), Div(todo.details, cls="marked"), btn)
+
+# @patch
+# def __ft__(self:Todo):
+#     ashow = AX(self.title, show.to(id=self.id), 'current-todo')
+#     aedit = AX('edit',     edit.to(id=self.id), 'current-todo')
+#     dt = '✅ ' if self.done else ''
+#     cts = (dt, ashow, ' | ', aedit, Hidden(id="id", value=self.id), Hidden(id="priority", value="0"))
+#     return Li(*cts, id=f'todo-{self.id}')
+
+@rt("/create")
+def create(title: str):
+    if not title:
+        return render_to_response(View(xmlns="https://hyperview.org/hyperview"))  # Empty view
+    todo = todos.insert(Todo(title=title, done=False, priority=len(todos())))
+    # For partial updates, we need to include the namespace
+    return render_to_response(
+        View(
+            Text(f"{'✅ ' if todo.done else ''}{todo.title}"), 
+            id=f"todo-{todo.id}",
+            xmlns="https://hyperview.org/hyperview"
+        )
+    )
+
+
+@rt("/todo/{id:int}")
+def show_todo(id: int):
+    """Show todo in view mode"""
+    todo = todos[id]
+    return render_to_response(TodoItem(todo))
+
+@rt("/todo/{id:int}/edit", methods=['GET'])
+def edit_todo_get(id: int):
+    """Show todo in edit mode"""
+    todo = todos[id]
+    return render_to_response(TodoEditItem(todo))
+
+@rt("/todo/{id:int}/edit", methods=['POST'])
+def edit_todo_post(id: int, title: str, done: str = "false"):
+    """Save todo edits"""
+    print(f"Received: title='{title}', done='{done}'")
+    todo = todos[id]
+    todo.title = title
+    todo.done = 1 if done == "on" else 0  # Switch sends "on" when checked
+    todos.update(todo)
+    print(f"Updated todo: {todo}")
+    # Return the todo in view mode after saving
+    return render_to_response(TodoItem(todo))
+
+@rt("/delete/{id:int}")
+def delete_todo(id: int):
+    todos.delete(id)
+    # Return empty response - the client will remove the element
+    return render_to_response(View(xmlns="https://hyperview.org/hyperview"))
+
+@rt("/hyperview")
+def index():
+    todo_items = [TodoItem(t) for t in todos(order_by='priority')]
+    
+    main_content = View(
+        Form(
+            TextField(name="title", placeholder="New Todo", style="text-field"),
+            Text(
+                Behavior(trigger="press", verb="post", href="/create", 
+                        action="append", target="todo-list"),
+                "Add Todo",
+                style="button"
+            )
+        ),
+        View(*todo_items, id="todo-list")
+    )
+    
+    return render_to_response(
+        Layout(
+            header_content=Text("Todo list", style="header-title"),
+            main_content=main_content
+        )
+    )
+
+serve()
