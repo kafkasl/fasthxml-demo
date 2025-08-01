@@ -7,7 +7,6 @@ todos = db.create(Todo, transform=True)
 # Hyperview components
 def Doc(*c, **kwargs): return FT('doc', c, kwargs)
 def Screen(*c, **kwargs): return FT('screen', c, kwargs)
-def Body(*c, **kwargs): return FT('body', c, kwargs)
 def View(*c, **kwargs): return FT('view', c, kwargs)
 def Text(*c, **kwargs): return FT('text', c, kwargs)
 def TextField(*c, **kwargs): return FT('text-field', c, kwargs)
@@ -15,6 +14,8 @@ def Behavior(*c, **kwargs): return FT('behavior', c, kwargs)
 def Styles(*c, **kwargs): return FT('styles', c, kwargs)
 def Style(id, **kwargs): return FT('style', (), {'id': id, **kwargs})
 def Switch(*c, **kwargs): return FT('switch', c, kwargs)
+
+app,rt = fast_app()
 
 def render_to_response(component):
     """Render component to Hyperview XML response"""
@@ -67,9 +68,7 @@ def Layout(header_content=None, main_content=None):
         xmlns="https://hyperview.org/hyperview"
     )
 
-app,rt = fast_app()
 
-# TodoItem function removed - Todo objects now render themselves via __ft__
 
 def TodoEditItem(todo):
     """Render todo item in edit mode"""
@@ -83,14 +82,12 @@ def TodoEditItem(todo):
             ),
             View(
                 Text(
-                    Behavior(trigger="press", verb="post", href=f"/todo/{todo.id}/edit", 
-                            action="replace", target=f"todo-{todo.id}"),
+                    Behavior(trigger="press", verb="post", href=f"/todo/{todo.id}/edit", action="replace", target=f"todo-{todo.id}"),
                     "Save",
                     style="edit-button"
                 ),
                 Text(
-                    Behavior(trigger="press", verb="get", href=f"/todo/{todo.id}", 
-                            action="replace", target=f"todo-{todo.id}"),
+                    Behavior(trigger="press", verb="get", href=f"/todo/{todo.id}", action="replace", target=f"todo-{todo.id}"),
                     "Cancel",
                     style="delete-button"
                 ),
@@ -103,7 +100,7 @@ def TodoEditItem(todo):
     )
 
 
-def clr_details(): return Div(hx_swap_oob='innerHTML', id='current-todo')
+def clr_details(): return ""
 
 @rt
 def update(todo: Todo): return todos.update(todo), clr_details()
@@ -191,9 +188,9 @@ def delete_todo(id: int):
     # Return empty response - the client will remove the element
     return render_to_response(View(xmlns="https://hyperview.org/hyperview"))
 
-@rt("/hyperview")
+@rt()
 def index():
-    todo_items = todos(order_by='priority')  # Todo objects will render themselves via __ft__
+    todo_items = todos(order_by='priority')
     
     main_content = View(
         Form(
