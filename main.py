@@ -69,29 +69,7 @@ def Layout(header_content=None, main_content=None):
 
 app,rt = fast_app()
 
-def TodoItem(todo):
-    """Render a single todo item with edit and delete buttons"""
-    return View(
-        Text(f"{'✅ ' if todo.done else ''}{todo.title}", style="todo-text"),
-        View(
-            Text(
-                Behavior(trigger="press", verb="get", href=f"/todo/{todo.id}/edit", 
-                        action="replace", target=f"todo-{todo.id}"),
-                "Edit",
-                style="edit-button"
-            ),
-            Text(
-                Behavior(trigger="press", verb="post", href=f"/delete/{todo.id}", 
-                        action="replace", target=f"todo-{todo.id}"),
-                "Delete",
-                style="delete-button"
-            ),
-            style="todo-actions"
-        ),
-        id=f"todo-{todo.id}",
-        style="todo-item",
-        xmlns="https://hyperview.org/hyperview"
-    )
+# TodoItem function removed - Todo objects now render themselves via __ft__
 
 def TodoEditItem(todo):
     """Render todo item in edit mode"""
@@ -150,34 +128,44 @@ def show(id:int):
                  hx_target=f'#todo-{todo.id}', hx_swap="outerHTML")
     return Div(H2(todo.title), Div(todo.details, cls="marked"), btn)
 
-# @patch
-# def __ft__(self:Todo):
-#     ashow = AX(self.title, show.to(id=self.id), 'current-todo')
-#     aedit = AX('edit',     edit.to(id=self.id), 'current-todo')
-#     dt = '✅ ' if self.done else ''
-#     cts = (dt, ashow, ' | ', aedit, Hidden(id="id", value=self.id), Hidden(id="priority", value="0"))
-#     return Li(*cts, id=f'todo-{self.id}')
+@patch
+def __ft__(self:Todo):
+    """Render Todo as Hyperview XML"""
+    return View(
+        Text(f"{'✅ ' if self.done else ''}{self.title}", style="todo-text"),
+        View(
+            Text(
+                Behavior(trigger="press", verb="get", href=f"/todo/{self.id}/edit", 
+                        action="replace", target=f"todo-{self.id}"),
+                "Edit",
+                style="edit-button"
+            ),
+            Text(
+                Behavior(trigger="press", verb="post", href=f"/delete/{self.id}", 
+                        action="replace", target=f"todo-{self.id}"),
+                "Delete",
+                style="delete-button"
+            ),
+            style="todo-actions"
+        ),
+        id=f"todo-{self.id}",
+        style="todo-item",
+        xmlns="https://hyperview.org/hyperview"
+    )
 
 @rt("/create")
 def create(title: str):
     if not title:
         return render_to_response(View(xmlns="https://hyperview.org/hyperview"))  # Empty view
     todo = todos.insert(Todo(title=title, done=False, priority=len(todos())))
-    # For partial updates, we need to include the namespace
-    return render_to_response(
-        View(
-            Text(f"{'✅ ' if todo.done else ''}{todo.title}"), 
-            id=f"todo-{todo.id}",
-            xmlns="https://hyperview.org/hyperview"
-        )
-    )
+    return render_to_response(todo)  # Uses Todo.__ft__
 
 
 @rt("/todo/{id:int}")
 def show_todo(id: int):
     """Show todo in view mode"""
     todo = todos[id]
-    return render_to_response(TodoItem(todo))
+    return render_to_response(todo)  # Uses Todo.__ft__
 
 @rt("/todo/{id:int}/edit", methods=['GET'])
 def edit_todo_get(id: int):
@@ -195,7 +183,7 @@ def edit_todo_post(id: int, title: str, done: str = "false"):
     todos.update(todo)
     print(f"Updated todo: {todo}")
     # Return the todo in view mode after saving
-    return render_to_response(TodoItem(todo))
+    return render_to_response(todo)  # Uses Todo.__ft__
 
 @rt("/delete/{id:int}")
 def delete_todo(id: int):
@@ -205,7 +193,7 @@ def delete_todo(id: int):
 
 @rt("/hyperview")
 def index():
-    todo_items = [TodoItem(t) for t in todos(order_by='priority')]
+    todo_items = todos(order_by='priority')  # Todo objects will render themselves via __ft__
     
     main_content = View(
         Form(
