@@ -1,19 +1,11 @@
 from fasthtml.common import *
-
+from fasthtml.components import Doc, Screen, View, Text, Text_Field, Behavior, Styles, Switch
 db = database('data/utodos.db')
 class Todo: id:int; title:str; done:bool; details:str; priority:int
 todos = db.create(Todo, transform=True)
 
-# Hyperview components
-def Doc(*c, **kwargs): return FT('doc', c, kwargs)
-def Screen(*c, **kwargs): return FT('screen', c, kwargs)
-def View(*c, **kwargs): return FT('view', c, kwargs)
-def Text(*c, **kwargs): return FT('text', c, kwargs)
-def TextField(*c, **kwargs): return FT('text-field', c, kwargs)
-def Behavior(*c, **kwargs): return FT('behavior', c, kwargs)
-def Styles(*c, **kwargs): return FT('styles', c, kwargs)
+# The style can't be auto-created by default due to the non-default id, have a look
 def Style(id, **kwargs): return FT('style', (), {'id': id, **kwargs})
-def Switch(*c, **kwargs): return FT('switch', c, kwargs)
 
 app,rt = fast_app()
 
@@ -74,7 +66,7 @@ def TodoEditItem(todo):
     """Render todo item in edit mode"""
     return Form(
         View(
-            TextField(name="title", value=todo.title, style="text-field"),
+            Text_Field(name="title", value=todo.title, style="text-field"),
             View(
                 Text("Done", style="label"),
                 Switch(name="done", value="on", selected="true" if todo.done else "false"),
@@ -188,13 +180,13 @@ def delete_todo(id: int):
     # Return empty response - the client will remove the element
     return render_to_response(View(xmlns="https://hyperview.org/hyperview"))
 
-@rt()
+@rt("/hyperview")
 def index():
     todo_items = todos(order_by='priority')
     
     main_content = View(
         Form(
-            TextField(name="title", placeholder="New Todo", style="text-field"),
+            Text_Field(name="title", placeholder="New Todo", style="text-field"),
             Text(
                 Behavior(trigger="press", verb="post", href="/create", 
                         action="append", target="todo-list"),
